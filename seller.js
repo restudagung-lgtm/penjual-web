@@ -1,3 +1,8 @@
+// ======================================================================
+// 🟠 WEB PENJUAL  (folder: penjual/)
+// File: seller.js
+// ======================================================================
+
 /*
   seller.js
   ---------
@@ -33,7 +38,12 @@ function switchAuthTab(tab){
     el.innerHTML = `
     <div class="card">
       <div class="field"><label>Username</label><input id="lu" type="text" placeholder="username"></div>
-      <div class="field"><label>Password</label><input id="lp" type="password" placeholder="••••••"></div>
+      <div class="field"><label>Password</label>
+        <div class="pwd-wrap">
+          <input id="lp" type="password" placeholder="••••••">
+          <button type="button" class="pwd-toggle" onclick="togglePwd('lp', this)">Lihat</button>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="doLogin()">Masuk</button>
       <p id="loginMsg" class="muted" style="margin-top:8px;"></p>
     </div>`;
@@ -43,7 +53,12 @@ function switchAuthTab(tab){
       <div class="field"><label>Nama toko</label><input id="ru" type="text" placeholder="contoh: Nasi Goreng Bu Sri"></div>
       <div class="field"><label>Deskripsi singkat</label><input id="rd" type="text" placeholder="contoh: Nasi goreng & mie goreng"></div>
       <div class="field"><label>Username</label><input id="rus" type="text" placeholder="username unik"></div>
-      <div class="field"><label>Password</label><input id="rp" type="password" placeholder="buat password"></div>
+      <div class="field"><label>Password</label>
+        <div class="pwd-wrap">
+          <input id="rp" type="password" placeholder="buat password">
+          <button type="button" class="pwd-toggle" onclick="togglePwd('rp', this)">Lihat</button>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="doRegister()">Daftar & Masuk</button>
       <p id="regMsg" class="muted" style="margin-top:8px;"></p>
     </div>`;
