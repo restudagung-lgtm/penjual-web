@@ -6,25 +6,26 @@
 /*
   seller.js
   ---------
-  Semua tampilan & aksi untuk web PENJUAL (situs berdiri sendiri):
-  login/daftar -> kelola menu (+foto) -> kelola pesanan masuk -> profil toko
-  (+foto toko, +QRIS) & cetak/unduh QR -> ringkasan.
+  Semua tampilan & aksi untuk web PENJUAL:
+  login/daftar -> kelola menu (tambah/edit/hapus + foto) -> kelola pesanan masuk
+  (+lokasi pembeli) -> profil toko (+foto, +rating) & QRIS & cetak/unduh QR -> ringkasan.
   Bergantung pada: state & go() dari app.js, sGet/sSet/sList/sDel/sUploadImage
-  dari storage.js, fungsi bantu dari utils.js, dan BUYER_SITE_URL dari site-config.js.
+  dari storage.js, fungsi bantu & ikon dari utils.js, dan BUYER_SITE_URL dari site-config.js.
 */
 
 const SELLER_CATS = [
-  { id:'makanan', label:'🍔 Makanan' },
-  { id:'minuman', label:'🥤 Minuman' },
-  { id:'snack', label:'🍟 Snack' },
-  { id:'lainnya', label:'✨ Lainnya' },
+  { id:'makanan', label:'Makanan', icon:'utensils' },
+  { id:'minuman', label:'Minuman', icon:'cup-soda' },
+  { id:'snack', label:'Snack', icon:'cookie' },
+  { id:'lainnya', label:'Lainnya', icon:'sparkles' },
 ];
+function sellerCatMeta(id){ return SELLER_CATS.find(c => c.id === id) || {label:'Lainnya', icon:'utensils'}; }
 
 /* ---------- login / daftar ---------- */
 function renderSellerAuth(){
   const app = document.getElementById('app');
   app.innerHTML = `
-  <div class="topbar"><div><h2>🏮 Dashboard Penjual</h2><div class="sub">Kelola toko kamu di alun-alun</div></div></div>
+  <div class="topbar"><div><h2 style="display:flex;align-items:center;gap:8px;">${ic('store',20)} Dashboard Penjual</h2><div class="sub">Kelola toko kamu di alun-alun</div></div></div>
   <div class="content">
     <div class="tabbar" style="border-radius:999px;overflow:hidden;margin-bottom:16px;position:static;background:var(--ink-2);">
       <button id="tabLogin" class="active" onclick="switchAuthTab('login')">Masuk</button>
@@ -49,7 +50,7 @@ function switchAuthTab(tab){
       <div class="field"><label>Password</label>
         <div class="pwd-wrap">
           <input id="lp" type="password" placeholder="••••••">
-          <button type="button" class="pwd-toggle" onclick="togglePwd('lp', this)">Lihat</button>
+          <button type="button" class="pwd-toggle ic-btn" onclick="togglePwd('lp', this)">${ic('eye',16)}</button>
         </div>
       </div>
       <button class="btn btn-primary" onclick="doLogin()">Masuk</button>
@@ -67,13 +68,14 @@ function switchAuthTab(tab){
       <div class="field"><label>Password</label>
         <div class="pwd-wrap">
           <input id="rp" type="password" placeholder="buat password">
-          <button type="button" class="pwd-toggle" onclick="togglePwd('rp', this)">Lihat</button>
+          <button type="button" class="pwd-toggle ic-btn" onclick="togglePwd('rp', this)">${ic('eye',16)}</button>
         </div>
       </div>
       <button class="btn btn-primary" onclick="doRegister()">Daftar & Masuk</button>
       <p id="regMsg" class="muted" style="margin-top:8px;"></p>
     </div>`;
   }
+  mountIcons();
 }
 
 async function doRegister(){
@@ -87,7 +89,7 @@ async function doRegister(){
   const existing = await sGet('seller:' + username, true);
   if(existing){ msg.textContent = 'Username sudah dipakai, pilih yang lain.'; return; }
   const storeId = genId();
-  await sSet('store:' + storeId, {id:storeId, name, desc, category, ownerUsername:username}, true);
+  await sSet('store:' + storeId, {id:storeId, name, desc, category, ownerUsername:username, ratingSum:0, ratingCount:0}, true);
   await sSet('seller:' + username, {password:pass, storeId, storeName:name}, true);
   await sSet('session', username, false);
   state.seller = {username, storeId, storeName:name};
@@ -117,15 +119,16 @@ async function renderSellerDash(){
   app.innerHTML = `
   <div class="topbar">
     <div style="flex:1;"><h2>${escapeHtml(state.seller.storeName || 'Toko Saya')}</h2><div class="sub">@${escapeHtml(state.seller.username || '')}</div></div>
-    <button class="btn btn-sm btn-outline" onclick="doLogout()">Keluar</button>
+    <button class="btn btn-sm btn-outline" onclick="doLogout()">${ic('log-out',14)} Keluar</button>
   </div>
   <div class="content" id="dashContent"></div>
   <div class="tabbar">
-    <button id="t-menu" onclick="switchDashTab('menu')">🍢<span>Menu</span></button>
-    <button id="t-orders" onclick="switchDashTab('orders')">🧾<span>Pesanan</span></button>
-    <button id="t-store" onclick="switchDashTab('store')">🏮<span>Toko &amp; QR</span></button>
-    <button id="t-sum" onclick="switchDashTab('summary')">📊<span>Ringkasan</span></button>
+    <button id="t-menu" onclick="switchDashTab('menu')">${ic('utensils',20)}<span>Menu</span></button>
+    <button id="t-orders" onclick="switchDashTab('orders')">${ic('receipt',20)}<span>Pesanan</span></button>
+    <button id="t-store" onclick="switchDashTab('store')">${ic('store',20)}<span>Toko &amp; QR</span></button>
+    <button id="t-sum" onclick="switchDashTab('summary')">${ic('bar-chart-3',20)}<span>Ringkasan</span></button>
   </div>`;
+  mountIcons();
   switchDashTab(state.sellerTab || 'menu');
 }
 
@@ -153,7 +156,7 @@ async function renderDashMenu(){
       <label class="photo-upload upload-square" id="mPhotoBox">
         <input type="file" accept="image/*" id="mPhoto" onchange="previewImageInput(this,'mPhotoPreview')">
         <img id="mPhotoPreview">
-        <span class="ph-ic">📷</span><span>Foto</span>
+        <span class="ph-ic">${ic('camera',20)}</span><span>Foto</span>
       </label>
       <div class="upload-text">Tambahkan foto makanan/minuman supaya menu lebih menarik di mata pembeli. Opsional, bisa dilewati.</div>
     </div>
@@ -165,20 +168,28 @@ async function renderDashMenu(){
     <button class="btn btn-primary" id="mAddBtn" onclick="addMenu()">Tambahkan</button>
   </div>
   <div class="section-title">Menu kamu (${items.length})</div>
-  ${items.length === 0 ? '<div class="empty"><span class="empty-ic">🍽️</span>Belum ada menu. Tambahkan menu pertama kamu di atas.</div>' :
+  ${items.length === 0 ? `<div class="empty">${ic('utensils',30)}<br>Belum ada menu. Tambahkan menu pertama kamu di atas.</div>` :
     items.map(m => `
+    <div id="mrow-${m.id}">
     <div class="menu-card">
-      <div class="menu-thumb" style="${m.photoURL ? `background-image:url('${m.photoURL}')` : ''}">${m.photoURL ? '' : (SELLER_CATS.find(c=>c.id===m.category)?.label.split(' ')[0] || '🍽️')}</div>
+      <div class="menu-thumb" style="${m.photoURL ? `background-image:url('${m.photoURL}')` : ''}">${m.photoURL ? '' : ic(sellerCatMeta(m.category).icon,24)}</div>
       <div class="menu-info">
         <div class="menu-name">${escapeHtml(m.name)}</div>
         <div class="menu-price">${rupiah(m.price)}</div>
+        <div class="faint">${sellerCatMeta(m.category).label}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
         <div class="switch ${m.available !== false ? 'on' : ''}" onclick="toggleMenu('${m.id}', ${m.available === false})"><div class="knob"></div></div>
-        <button class="linklike" style="color:var(--chili);" onclick="deleteMenu('${m.id}')">Hapus</button>
+        <div style="display:flex;gap:10px;">
+          <button class="ic-btn" style="color:var(--lantern);" onclick="openEditMenu('${m.id}')">${ic('pencil',16)}</button>
+          <button class="ic-btn" style="color:var(--chili);" onclick="deleteMenu('${m.id}')">${ic('trash-2',16)}</button>
+        </div>
       </div>
+    </div>
+    <div id="editbox-${m.id}"></div>
     </div>`).join('')}
   `;
+  mountIcons();
 }
 
 async function addMenu(){
@@ -199,6 +210,60 @@ async function addMenu(){
     }catch(e){ console.error(e); }
   }
   await sSet('menu:' + state.seller.storeId + ':' + id, {id, storeId:state.seller.storeId, name, price, category, photoURL, available:true}, true);
+  renderDashMenu();
+}
+
+/* ---- edit menu (form inline, muncul di bawah item) ---- */
+async function openEditMenu(id){
+  const box = document.getElementById('editbox-' + id);
+  if(!box) return;
+  if(box.innerHTML){ box.innerHTML = ''; return; } // toggle tutup kalau sudah terbuka
+  const key = 'menu:' + state.seller.storeId + ':' + id;
+  const m = await sGet(key, true);
+  if(!m) return;
+  box.innerHTML = `
+  <div class="edit-panel">
+    <div class="upload-row">
+      <label class="photo-upload upload-square" id="ePhotoBox-${id}">
+        <input type="file" accept="image/*" id="ePhoto-${id}" onchange="previewImageInput(this,'ePhotoPreview-${id}')">
+        <img id="ePhotoPreview-${id}" src="${m.photoURL || ''}" style="${m.photoURL ? 'display:block;' : ''}">
+        <span class="ph-ic">${ic('camera',18)}</span><span>Foto</span>
+      </label>
+      <div class="upload-text">Ganti foto, atau biarkan untuk memakai foto yang sudah ada.</div>
+    </div>
+    <div class="field"><label>Nama menu</label><input id="eName-${id}" type="text" value="${escapeHtml(m.name)}"></div>
+    <div class="field"><label>Harga (Rp)</label><input id="ePrice-${id}" type="number" value="${m.price}"></div>
+    <div class="field"><label>Kategori</label>
+      <select id="eCat-${id}">${SELLER_CATS.map(c => `<option value="${c.id}" ${m.category===c.id?'selected':''}>${c.label}</option>`).join('')}</select>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" onclick="saveEditMenu('${id}')">Simpan</button>
+      <button class="btn btn-outline" onclick="document.getElementById('editbox-${id}').innerHTML=''">Batal</button>
+    </div>
+    <p id="eMsg-${id}" class="muted" style="margin-top:8px;"></p>
+  </div>`;
+  mountIcons();
+}
+
+async function saveEditMenu(id){
+  const key = 'menu:' + state.seller.storeId + ':' + id;
+  const m = await sGet(key, true);
+  if(!m) return;
+  const name = document.getElementById('eName-' + id).value.trim();
+  const price = Number(document.getElementById('ePrice-' + id).value);
+  const category = document.getElementById('eCat-' + id).value;
+  if(!name || !price){ document.getElementById('eMsg-' + id).textContent = 'Isi nama dan harga.'; return; }
+  m.name = name; m.price = price; m.category = category;
+  const fileInput = document.getElementById('ePhoto-' + id);
+  const file = fileInput.files && fileInput.files[0];
+  if(file){
+    try{
+      const blob = await resizeImageToBlob(file, 900, 0.75);
+      const url = await sUploadImage(`stores/${state.seller.storeId}/menu/${id}.jpg`, blob);
+      if(url) m.photoURL = url;
+    }catch(e){ console.error(e); }
+  }
+  await sSet(key, m, true);
   renderDashMenu();
 }
 
@@ -223,18 +288,21 @@ async function deleteMenu(id){
 /* ---- tab: pesanan ---- */
 async function renderDashOrders(){
   const el = document.getElementById('dashContent');
-  el.innerHTML = '<div class="empty">Memuat pesanan…</div>';
+  el.innerHTML = `<div class="empty">${ic('loader-2',24)} Memuat pesanan…</div>`;
+  mountIcons();
   const keys = await sList('order:', true);
   let orders = (await Promise.all(keys.map(k => sGet(k, true)))).filter(Boolean);
   orders = orders.filter(o => o.storeId === state.seller.storeId).sort((a,b) => b.createdAt - a.createdAt);
-  if(orders.length === 0){ el.innerHTML = '<div class="empty"><span class="empty-ic">🧾</span>Belum ada pesanan masuk.</div>'; return; }
+  if(orders.length === 0){ el.innerHTML = `<div class="empty">${ic('receipt',30)}<br>Belum ada pesanan masuk.</div>`; mountIcons(); return; }
   const totalTables = await getTotalTables();
   el.innerHTML = orders.map(o => {
+    const canceled = o.status === 'dibatalkan';
     const idx = STATUS_FLOW.indexOf(o.status);
-    const next = STATUS_FLOW[idx + 1];
+    const next = !canceled ? STATUS_FLOW[idx + 1] : null;
     const mapOpen = state.mapOpenFor === o.id;
     const payLabel = o.paymentMethod === 'qris' ? 'QRIS' : 'Tunai';
     const payStatus = o.paymentStatus || (o.paymentMethod === 'qris' ? 'lunas' : 'bayar_ditempat');
+    const gmaps = mapsLink(o.location);
     return `<div class="card">
       <div class="row">
         <div><strong>Meja No. ${o.table}</strong> <span class="muted">· ${new Date(o.createdAt).toLocaleTimeString('id-ID')}</span></div>
@@ -244,13 +312,15 @@ async function renderDashOrders(){
         ${o.items.map(it => `<div class="muted" style="display:flex;justify-content:space-between;font-size:13.5px;"><span>${it.qty}× ${escapeHtml(it.name)}</span><span>${rupiah(it.price*it.qty)}</span></div>`).join('')}
       </div>
       <div class="row"><strong>${rupiah(o.total)}</strong><span class="badge badge-${payStatus}">${payLabel} ${payStatus === 'lunas' ? '· Lunas' : '· Bayar di tempat'}</span></div>
-      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <button class="linklike" onclick="toggleMap('${o.id}')">${mapOpen ? 'Sembunyikan lokasi meja' : 'Lihat lokasi meja'}</button>
-        ${next ? `<button class="btn btn-sm btn-primary" style="margin-left:auto;" onclick="advanceOrder('${o.id}')">Tandai: ${STATUS_LABEL[next]}</button>` : `<span class="muted" style="margin-left:auto;">Pesanan selesai</span>`}
+      <div style="margin-top:10px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+        <button class="linklike" onclick="toggleMap('${o.id}')">${mapOpen ? 'Sembunyikan denah' : 'Lihat denah meja'}</button>
+        ${gmaps ? `<a class="linklike" href="${gmaps}" target="_blank" style="text-decoration:none;">${ic('navigation',13)} Lokasi GPS pembeli</a>` : ''}
+        ${next ? `<button class="btn btn-sm btn-primary" style="margin-left:auto;" onclick="advanceOrder('${o.id}')">Tandai: ${STATUS_LABEL[next]}</button>` : (canceled ? `<span class="muted" style="margin-left:auto;">Dibatalkan pembeli</span>` : `<span class="muted" style="margin-left:auto;">Pesanan selesai</span>`)}
       </div>
       ${mapOpen ? `<div class="map-wrap" style="margin-top:10px;">${tableMapSVG(o.table, totalTables)}</div>` : ''}
     </div>`;
   }).join('');
+  mountIcons();
 }
 
 function toggleMap(orderId){
@@ -261,7 +331,7 @@ function toggleMap(orderId){
 async function advanceOrder(orderId){
   const key = 'order:' + orderId;
   const o = await sGet(key, true);
-  if(!o) return;
+  if(!o || o.status === 'dibatalkan') return;
   const idx = STATUS_FLOW.indexOf(o.status);
   if(idx < STATUS_FLOW.length - 1){ o.status = STATUS_FLOW[idx + 1]; await sSet(key, o, true); }
   renderDashOrders();
@@ -273,12 +343,19 @@ async function renderDashStore(){
   const store = await sGet('store:' + state.seller.storeId, true);
   el.innerHTML = `
   <div class="card">
+    <div class="row" style="align-items:flex-start;">
+      <h3>Rating Toko</h3>
+      ${ratingBadge(store)}
+    </div>
+    <p class="muted" style="margin-top:4px;">Rating didapat dari penilaian pembeli setelah pesanan selesai.</p>
+  </div>
+  <div class="card">
     <h3>Foto Toko</h3>
     <p class="muted" style="margin:4px 0 10px;">Tampil di daftar lapak yang dilihat pembeli.</p>
     <label class="photo-upload upload-banner" id="stPhotoBox">
       <input type="file" accept="image/*" id="stPhoto" onchange="uploadStorePhoto(this)">
       <img id="stPhotoPreview" src="${store?.photoURL || ''}" style="${store?.photoURL ? 'display:block;' : ''}">
-      <span class="ph-ic">📷</span><span id="stPhotoLabel">${store?.photoURL ? 'Ganti foto toko' : 'Tambah foto toko'}</span>
+      <span class="ph-ic">${ic('camera',20)}</span><span id="stPhotoLabel">${store?.photoURL ? 'Ganti foto toko' : 'Tambah foto toko'}</span>
     </label>
   </div>
   <div class="card">
@@ -292,18 +369,19 @@ async function renderDashStore(){
       <label>Toko kamu paling dekat dengan meja nomor berapa?</label>
       <input id="stNearTable" type="number" min="1" max="30" value="${store?.nearTable || ''}" placeholder="contoh: 5">
     </div>
-    <p class="faint" style="margin-top:-6px;">Ini dipakai untuk mengurutkan toko dari yang terdekat saat pembeli scan QR di suatu meja — tanpa perlu izin lokasi apa pun.</p>
+    <p class="faint" style="margin-top:-6px;">Dipakai untuk mengurutkan toko dari yang terdekat saat pembeli scan QR di suatu meja.</p>
     <button class="btn btn-primary" onclick="saveStore()">Simpan Perubahan</button>
     <p id="stMsg" class="muted" style="margin-top:8px;"></p>
   </div>
   <div class="card">
     <h3>QRIS Pembayaran</h3>
-    <p class="muted" style="margin:4px 0 10px;">Unggah gambar QRIS toko kamu (dari QRIS bank/e-wallet/merchant kamu). Kalau ini terisi, pembeli bisa memilih bayar QRIS langsung ke akun kamu saat checkout.</p>
+    <p class="muted" style="margin:4px 0 10px;">Unggah gambar QRIS toko kamu (dari QRIS bank/e-wallet/merchant kamu). Nominal transaksi akan otomatis disisipkan ke kode ini setiap pembeli checkout, dan tetap bisa dipindai GoPay, OVO, DANA, ShopeePay, atau m-banking apa pun karena semua memakai standar QRIS yang sama.</p>
     <label class="photo-upload" style="height:150px;" id="qrisPhotoBox">
       <input type="file" accept="image/*" id="qrisPhoto" onchange="uploadQrisPhoto(this)">
       <img id="qrisPhotoPreview" src="${store?.qrisImage || ''}" style="${store?.qrisImage ? 'display:block;object-fit:contain;background:#fff;' : ''}">
-      <span class="ph-ic">▣</span><span id="qrisPhotoLabel">${store?.qrisImage ? 'Ganti gambar QRIS' : 'Unggah gambar QRIS'}</span>
+      <span class="ph-ic">${ic('qr-code',20)}</span><span id="qrisPhotoLabel">${store?.qrisImage ? 'Ganti gambar QRIS' : 'Unggah gambar QRIS'}</span>
     </label>
+    <p id="qrisStatusMsg" class="muted" style="margin-top:8px;">${store?.qrisPayload ? ic('check',13)+' Nominal otomatis aktif.' : (store?.qrisImage ? 'Gambar tersimpan, tapi belum bisa dibaca otomatis untuk nominal — cek README untuk tips foto QRIS yang jelas.' : '')}</p>
   </div>
   <div class="card">
     <h3>QR Kode Meja</h3>
@@ -312,11 +390,12 @@ async function renderDashStore(){
     <button class="btn btn-outline" onclick="renderQRs()">Buat QR</button>
     <div id="qrGrid" class="qr-grid"></div>
     <div class="qr-actions" id="qrActions" style="display:none;">
-      <button class="btn btn-primary btn-block-sm" onclick="printAllQRs()">🖨️ Cetak Semua</button>
-      <button class="btn btn-outline btn-block-sm" onclick="downloadAllQRs()">⬇️ Unduh Semua</button>
+      <button class="btn btn-primary btn-block-sm" onclick="printAllQRs()">${ic('printer',15)} Cetak Semua</button>
+      <button class="btn btn-outline btn-block-sm" onclick="downloadAllQRs()">${ic('download',15)} Unduh Semua</button>
     </div>
     <p class="faint" style="margin-top:10px;">QR ini memakai alamat: ${escapeHtml(BUYER_SITE_URL)}<br>Kalau alamat web pembeli berubah, ubah dulu di file <code>site-config.js</code>, lalu buat ulang QR di sini.</p>
   </div>`;
+  mountIcons();
 }
 
 async function uploadStorePhoto(input){
@@ -346,19 +425,27 @@ async function uploadQrisPhoto(input){
   if(!file) return;
   const label = document.getElementById('qrisPhotoLabel');
   const preview = document.getElementById('qrisPhotoPreview');
+  const statusMsg = document.getElementById('qrisStatusMsg');
   const oldLabel = label.textContent;
   label.textContent = 'Mengunggah…';
+  statusMsg.textContent = 'Membaca kode QRIS…';
   previewImageInput(input, 'qrisPhotoPreview');
   preview.style.objectFit = 'contain';
   preview.style.background = '#fff';
   try{
+    const payload = await decodeQRISFromFile(file);
     const blob = await resizeImageToBlob(file, 700, 0.85);
     const url = await sUploadImage(`stores/${state.seller.storeId}/qris.jpg`, blob);
     if(!url){ alert('Gagal mengunggah QRIS. Pastikan Firebase Storage sudah diaktifkan (lihat firebase-config.js).'); label.textContent = oldLabel; return; }
     const store = await sGet('store:' + state.seller.storeId, true) || {id: state.seller.storeId};
     store.qrisImage = url;
+    store.qrisPayload = payload || null;
     await sSet('store:' + state.seller.storeId, store, true);
     label.textContent = 'Ganti gambar QRIS';
+    statusMsg.innerHTML = payload
+      ? ic('check',13) + ' Terbaca! Nominal transaksi akan otomatis terisi untuk pembeli.'
+      : 'Gambar tersimpan, tapi kodenya belum terbaca otomatis (coba foto lebih tegak lurus & terang). Pembeli tetap bisa bayar manual dengan mencocokkan nominal.';
+    mountIcons();
   }catch(e){
     console.error(e);
     alert('Gagal memproses gambar QRIS.');
@@ -391,7 +478,7 @@ async function renderQRs(){
   let html = '';
   for(let i = 1; i <= n; i++){
     const url = base + '/?table=' + i;
-    const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(url);
+    const qrImg = qrEncodeURL(url, 300);
     _lastQRs.push({ n: i, img: qrImg });
     html += `<div class="qr-card">
       <img src="${qrImg}" alt="QR Meja ${i}">
@@ -407,7 +494,7 @@ async function downloadAllQRs(){
   if(_lastQRs.length === 0) return;
   for(const q of _lastQRs){
     await downloadImageURL(q.img, `qr-meja-${q.n}.png`);
-    await new Promise(r => setTimeout(r, 300)); // beri jeda supaya browser tidak memblokir unduhan beruntun
+    await new Promise(r => setTimeout(r, 300));
   }
 }
 
@@ -443,12 +530,16 @@ async function renderDashSummary(){
   let orders = (await Promise.all(keys.map(k => sGet(k, true)))).filter(Boolean);
   orders = orders.filter(o => o.storeId === state.seller.storeId);
   const selesai = orders.filter(o => o.status === 'selesai');
+  const dibatalkan = orders.filter(o => o.status === 'dibatalkan');
   const totalPendapatan = selesai.reduce((a,o) => a + o.total, 0);
-  const belumSelesai = orders.length - selesai.length;
+  const berjalan = orders.length - selesai.length - dibatalkan.length;
+  const store = await sGet('store:' + state.seller.storeId, true);
   el.innerHTML = `
+  <div class="card"><div class="row"><span class="muted">Rating toko</span>${ratingBadge(store)}</div></div>
   <div class="card"><div class="muted">Total pesanan masuk</div><h3>${orders.length}</h3></div>
   <div class="card"><div class="muted">Pesanan selesai</div><h3>${selesai.length}</h3></div>
-  <div class="card"><div class="muted">Sedang berjalan</div><h3>${belumSelesai}</h3></div>
+  <div class="card"><div class="muted">Sedang berjalan</div><h3>${berjalan}</h3></div>
+  <div class="card"><div class="muted">Dibatalkan pembeli</div><h3>${dibatalkan.length}</h3></div>
   <div class="card"><div class="muted">Pendapatan (pesanan selesai)</div><h3>${rupiah(totalPendapatan)}</h3></div>
   `;
 }
